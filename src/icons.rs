@@ -15,9 +15,9 @@ pub fn icon_for(name: &str, is_dir: bool) -> (&'static str, Color) {
         .unwrap_or("");
 
     match ext.to_lowercase().as_str() {
-        "rs"                     => ("\u{e7a8} ", Color::Red),
-        "py" | "pyw"             => ("\u{e73c} ", Color::Yellow),
-        "js" | "mjs" | "cjs"    => ("\u{e74e} ", Color::Yellow),
+        "rs"                     => ("\u{e68b} ", Color::Red),
+        "py" | "pyw"             => ("\u{e606} ", Color::Yellow),
+        "js" | "mjs" | "cjs"    => ("\u{e60c} ", Color::Yellow),
         "ts" | "mts"             => ("\u{e628} ", Color::Cyan),
         "jsx"                    => ("\u{e7ba} ", Color::Cyan),
         "tsx"                    => ("\u{e7ba} ", Color::Cyan),
@@ -34,10 +34,10 @@ pub fn icon_for(name: &str, is_dir: bool) -> (&'static str, Color) {
         "html" | "htm"           => ("\u{e736} ", Color::Red),
         "css"                    => ("\u{e749} ", Color::Blue),
         "scss" | "sass"          => ("\u{e603} ", Color::Magenta),
-        "md" | "markdown"        => ("\u{e609} ", Color::White),
+        "md" | "markdown"        => ("\u{f48a} ", Color::White),
         "json"                   => ("\u{e60b} ", Color::Yellow),
-        "toml"                   => ("\u{e60b} ", Color::Gray),
-        "yaml" | "yml"           => ("\u{e60b} ", Color::Red),
+        "toml"                   => ("\u{e6b2} ", Color::Gray),
+        "yaml" | "yml"           => ("\u{e8eb} ", Color::Red),
         "xml"                    => ("\u{e60b} ", Color::Red),
         "sh" | "bash" | "zsh" | "fish" => ("\u{e795} ", Color::Green),
         "sql"                    => ("\u{e706} ", Color::Cyan),
