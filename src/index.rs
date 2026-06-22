@@ -1,21 +1,12 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // ─── Config ──────────────────────────────────────────────────────────────────
-
-#[derive(Deserialize, Clone)]
-pub struct LibraryEntry {
-    pub name: String,
-    #[serde(default)]
-    pub source: Option<String>,
-}
 
 #[derive(Deserialize, Default)]
 struct LibrariesConfig {
     #[serde(default)]
     active: String,
-    #[serde(default)]
-    list: Vec<LibraryEntry>,
 }
 
 #[derive(Deserialize, Default)]
@@ -36,31 +27,6 @@ fn read_config() -> Config {
 pub fn active_library() -> String {
     let name = read_config().libraries.active;
     if name.is_empty() { "main".to_string() } else { name }
-}
-
-pub fn load_libraries() -> Vec<LibraryEntry> {
-    read_config().libraries.list
-}
-
-// Write the new active library name to config.toml, preserving other fields.
-pub fn write_active_library(name: &str) {
-    let home = dirs::home_dir().unwrap();
-    let path = format!("{}/.basalto/config.toml", home.to_str().unwrap());
-    let content = std::fs::read_to_string(&path).unwrap_or_default();
-
-    // Replace the active = "..." line inside [libraries]; add section if missing.
-    let new_line = format!("active = \"{}\"", name);
-    if content.contains("active = ") {
-        let updated = content
-            .lines()
-            .map(|l| if l.trim_start().starts_with("active = ") { new_line.as_str() } else { l })
-            .collect::<Vec<_>>()
-            .join("\n");
-        std::fs::write(&path, updated + "\n").ok();
-    } else if content.contains("[libraries]") {
-        let updated = content.replace("[libraries]", &format!("[libraries]\n{}", new_line));
-        std::fs::write(&path, updated).ok();
-    }
 }
 
 // ─── Plugin list ─────────────────────────────────────────────────────────────
@@ -122,7 +88,7 @@ fn which_basalto_tui() -> bool {
 
 // ─── Library index ───────────────────────────────────────────────────────────
 
-#[derive(Deserialize, Default, Clone)]
+#[derive(Deserialize, Serialize, Default, Clone)]
 pub struct EntryMeta {
     #[serde(default)]
     pub description: String,
@@ -131,14 +97,12 @@ pub struct EntryMeta {
     #[serde(default, skip)]
     pub is_dir: bool,
     #[serde(default)]
-    #[allow(dead_code)]
     pub usos: u32,
     #[serde(default)]
-    #[allow(dead_code)]
     pub agregado: String,
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Serialize, Default)]
 struct LibraryIndex {
     #[serde(default)]
     files: HashMap<String, EntryMeta>,
@@ -221,4 +185,91 @@ pub fn lib_path() -> String {
 fn index_path() -> String {
     let home = dirs::home_dir().unwrap();
     format!("{}/.basalto/{}.index.toml", home.to_str().unwrap(), active_library())
+}
+
+// ─── Write operations ────────────────────────────────────────────────────────
+
+pub fn add_entry(key: &str, desc: &str, tags: Vec<String>) {
+    let mut files = read_index();
+    files.insert(key.to_string(), EntryMeta {
+        description: desc.to_string(),
+        tags,
+        is_dir: false,
+        usos: 0,
+        agregado: today(),
+    });
+    write_index(files);
+}
+
+pub fn increment_usos(key: &str) {
+    let mut files = read_index();
+    if let Some(meta) = files.get_mut(key) {
+        meta.usos += 1;
+        write_index(files);
+    }
+}
+
+pub fn remove_entry(key: &str) {
+    let mut files = read_index();
+    files.remove(key);
+    write_index(files);
+}
+
+pub fn load_all_entries() -> Vec<(String, EntryMeta)> {
+    let mut entries: Vec<(String, EntryMeta)> = read_index().into_iter().collect();
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    entries
+}
+
+pub fn run_push() -> Vec<String> {
+    let dir = lib_path();
+    match std::process::Command::new("git").args(["push"]).current_dir(&dir).output() {
+        Ok(o) => {
+            let mut lines: Vec<String> = String::from_utf8_lossy(&o.stdout)
+                .lines().map(|l| l.to_string()).collect();
+            for l in String::from_utf8_lossy(&o.stderr).lines() {
+                lines.push(l.to_string());
+            }
+            if lines.iter().all(|l| l.trim().is_empty()) {
+                lines.push(if o.status.success() {
+                    "✓ push exitoso".to_string()
+                } else {
+                    "✗ push falló".to_string()
+                });
+            }
+            lines.retain(|l| !l.trim().is_empty());
+            lines
+        }
+        Err(e) => vec![format!("error: {}", e)],
+    }
+}
+
+fn write_index(files: HashMap<String, EntryMeta>) {
+    if let Ok(text) = toml::to_string_pretty(&LibraryIndex { files }) {
+        std::fs::write(index_path(), text).ok();
+    }
+}
+
+fn today() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let mut days = (secs / 86400) as u32;
+    let mut year = 1970u32;
+    loop {
+        let diy = if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) { 366 } else { 365 };
+        if days < diy { break; }
+        days -= diy;
+        year += 1;
+    }
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let months = [31u32, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let (mut month, mut day) = (1u32, days);
+    for m in &months {
+        if day < *m { break; }
+        day -= m;
+        month += 1;
+    }
+    format!("{:04}-{:02}-{:02}", year, month, day + 1)
 }
