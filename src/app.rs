@@ -1,6 +1,13 @@
 use crate::index::{self, EntryMeta, PluginInfo};
 use ratatui::layout::Rect;
 
+pub enum SidebarRow {
+    Header(usize),   // section index: 0=plugins, 1=tags, 2=git
+    Plugin,
+    Tag,
+    GitBranch,
+}
+
 pub struct App {
     pub entries: Vec<(String, EntryMeta)>,
     pub selected: usize,
@@ -11,7 +18,7 @@ pub struct App {
     pub preview_git_info: String,
     pub list_area: Rect,
     pub sidebar_focused: bool,
-    pub sidebar_section: usize,        // 0=plugins 1=tags 2=git
+    pub sidebar_cursor: usize,         // index into sidebar_items()
     pub sidebar_collapsed: [bool; 3],
     pub sidebar_scroll: usize,
     pub sidebar_height: u16,           // set by render each frame
@@ -40,7 +47,7 @@ impl App {
             preview_git_info: String::new(),
             list_area: Rect::default(),
             sidebar_focused: false,
-            sidebar_section: 0,
+            sidebar_cursor: 0,
             sidebar_collapsed: [false; 3],
             sidebar_scroll: 0,
             sidebar_height: 0,
@@ -196,50 +203,82 @@ impl App {
         self.tab = (self.tab + 3) % 4;
     }
 
+    // All navigable items in order, respecting collapse state (no blanks)
+    pub fn sidebar_items(&self) -> Vec<SidebarRow> {
+        let mut items = Vec::new();
+        items.push(SidebarRow::Header(0));
+        if !self.sidebar_collapsed[0] {
+            for _ in 0..self.plugins.len() { items.push(SidebarRow::Plugin); }
+        }
+        items.push(SidebarRow::Header(1));
+        if !self.sidebar_collapsed[1] {
+            for _ in 0..self.tags.len() { items.push(SidebarRow::Tag); }
+        }
+        items.push(SidebarRow::Header(2));
+        if !self.sidebar_collapsed[2] {
+            items.push(SidebarRow::GitBranch);
+        }
+        items
+    }
+
+    // Maps each item index to its line number in the rendered paragraph.
+    // Blank separator lines (between sections) are accounted for but not navigable.
+    pub fn sidebar_para_lines(&self) -> Vec<usize> {
+        let items = self.sidebar_items();
+        let mut para = 0usize;
+        let mut result = Vec::new();
+        for item in &items {
+            if let SidebarRow::Header(s) = item {
+                if *s > 0 { para += 1; } // blank separator before sections 1 and 2
+            }
+            result.push(para);
+            para += 1;
+            // Placeholder line ("sin plugins" / "sin tags") when section is empty + expanded
+            if let SidebarRow::Header(s) = item {
+                let empty = match s {
+                    0 => self.plugins.is_empty(),
+                    1 => self.tags.is_empty(),
+                    _ => false,
+                };
+                if !self.sidebar_collapsed[*s] && empty { para += 1; }
+            }
+        }
+        result
+    }
+
     pub fn sidebar_nav_up(&mut self) {
-        if self.sidebar_section > 0 {
-            self.sidebar_section -= 1;
-            self.scroll_to_section();
+        if self.sidebar_cursor > 0 {
+            self.sidebar_cursor -= 1;
+            self.scroll_to_cursor();
         }
     }
 
     pub fn sidebar_nav_down(&mut self) {
-        if self.sidebar_section < 2 {
-            self.sidebar_section += 1;
-            self.scroll_to_section();
+        let max = self.sidebar_items().len().saturating_sub(1);
+        if self.sidebar_cursor < max {
+            self.sidebar_cursor += 1;
+            self.scroll_to_cursor();
         }
     }
 
     pub fn sidebar_toggle_section(&mut self) {
-        let i = self.sidebar_section;
-        self.sidebar_collapsed[i] = !self.sidebar_collapsed[i];
-        self.scroll_to_section();
+        let items = self.sidebar_items();
+        let section = match items.get(self.sidebar_cursor) {
+            Some(SidebarRow::Header(s)) => *s,
+            _ => return,
+        };
+        self.sidebar_collapsed[section] = !self.sidebar_collapsed[section];
+        // Clamp cursor if items shrank after collapse
+        let total = self.sidebar_items().len();
+        if self.sidebar_cursor >= total { self.sidebar_cursor = total.saturating_sub(1); }
+        self.scroll_to_cursor();
     }
 
-    // Line index of each section header in the rendered paragraph
-    fn section_line(&self, section: usize) -> usize {
-        let plugins_body = if self.sidebar_collapsed[0] { 0 }
-            else if self.plugins.is_empty() { 1 }
-            else { self.plugins.len() };
-
-        let tags_body = if self.sidebar_collapsed[1] { 0 }
-            else if self.tags.is_empty() { 1 }
-            else { self.tags.len() };
-
-        match section {
-            0 => 0,
-            1 => 1 + plugins_body + 1,             // plugins header + body + blank
-            2 => 1 + plugins_body + 1 + 1 + tags_body + 1, // + tags header + body + blank
-            _ => 0,
-        }
-    }
-
-    // Scroll sidebar so the selected section header is visible
-    fn scroll_to_section(&mut self) {
-        let line    = self.section_line(self.sidebar_section);
+    fn scroll_to_cursor(&mut self) {
+        let para_lines = self.sidebar_para_lines();
+        let Some(&line) = para_lines.get(self.sidebar_cursor) else { return; };
         let visible = self.sidebar_height as usize;
         if visible == 0 { return; }
-
         if line < self.sidebar_scroll {
             self.sidebar_scroll = line;
         } else if line >= self.sidebar_scroll + visible {
