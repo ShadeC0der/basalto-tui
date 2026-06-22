@@ -23,27 +23,74 @@ struct LibraryIndex {
     files: HashMap<String, EntryMeta>,
 }
 
-// Merges index metadata with filesystem scan.
-// Entries not in the index appear with empty metadata.
-// Folders appear before files, both groups sorted alphabetically.
-pub fn load() -> Vec<(String, EntryMeta)> {
-    let mut indexed = read_index();
-
+// Immediate children of rel_path (relative to lib root).
+// Dirs come before files. Adds ".." at the top if not at root.
+pub fn load_dir(rel_path: &str) -> Vec<(String, EntryMeta)> {
     let lib = lib_path();
-    for (path, is_dir) in scan_entries(&lib, &lib) {
-        let meta = indexed.entry(path).or_insert_with(EntryMeta::default);
+    let target = if rel_path.is_empty() {
+        lib.clone()
+    } else {
+        format!("{}/{}", lib, rel_path)
+    };
+
+    let indexed = read_index();
+    let mut entries = Vec::new();
+
+    let Ok(dir_read) = std::fs::read_dir(&target) else {
+        return entries;
+    };
+
+    let mut items: Vec<_> = dir_read.flatten().collect();
+    items.sort_by_key(|e| e.file_name());
+
+    for item in items {
+        let name = item.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') {
+            continue;
+        }
+
+        let is_dir = item.path().is_dir();
+
+        // Index key is always the full relative path from lib root
+        let index_key = if rel_path.is_empty() {
+            name.clone()
+        } else {
+            format!("{}/{}", rel_path, name)
+        };
+
+        let mut meta = indexed.get(&index_key).cloned().unwrap_or_default();
         meta.is_dir = is_dir;
+
+        entries.push((name, meta));
     }
 
-    let mut entries: Vec<(String, EntryMeta)> = indexed.into_iter().collect();
-    entries.sort_by(|a, b| {
-        match (a.1.is_dir, b.1.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.0.cmp(&b.0),
-        }
+    entries.sort_by(|a, b| match (a.1.is_dir, b.1.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.0.cmp(&b.0),
     });
+
+    // Add ".." at top when inside a subdirectory
+    if !rel_path.is_empty() {
+        let mut parent = EntryMeta::default();
+        parent.is_dir = true;
+        entries.insert(0, ("..".to_string(), parent));
+    }
+
     entries
+}
+
+// Used only to build the full tag list for the sidebar
+pub fn load_all_tags() -> Vec<(String, usize)> {
+    let mut counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for meta in read_index().values() {
+        for tag in &meta.tags {
+            *counts.entry(tag.clone()).or_insert(0) += 1;
+        }
+    }
+    let mut tags: Vec<(String, usize)> = counts.into_iter().collect();
+    tags.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    tags
 }
 
 fn read_index() -> HashMap<String, EntryMeta> {
@@ -52,37 +99,6 @@ fn read_index() -> HashMap<String, EntryMeta> {
         .and_then(|c| toml::from_str::<LibraryIndex>(&c).ok())
         .unwrap_or_default()
         .files
-}
-
-// Recursively collect files and top-level directories relative to root.
-fn scan_entries(dir: &str, root: &str) -> Vec<(String, bool)> {
-    let mut result = Vec::new();
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return result;
-    };
-
-    let mut entries: Vec<_> = entries.flatten().collect();
-    entries.sort_by_key(|e| e.file_name());
-
-    for entry in entries {
-        let path = entry.path();
-        if entry.file_name().to_string_lossy().starts_with('.') {
-            continue;
-        }
-
-        let relative = path
-            .to_string_lossy()
-            .trim_start_matches(&format!("{}/", root))
-            .to_string();
-
-        if path.is_dir() {
-            result.push((relative.clone(), true));
-            result.extend(scan_entries(&path.to_string_lossy(), root));
-        } else {
-            result.push((relative, false));
-        }
-    }
-    result
 }
 
 pub fn lib_path() -> String {

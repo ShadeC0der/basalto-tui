@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::icons;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -35,7 +36,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         ])
         .split(area);
 
-    render_title(frame, root[0]);
+    render_title(frame, app, root[0]);
 
     let body = Layout::default()
         .direction(Direction::Horizontal)
@@ -49,11 +50,17 @@ pub fn render(frame: &mut Frame, app: &mut App) {
 
 // ─── Title bar ──────────────────────────────────────────────────────────────
 
-fn render_title(frame: &mut Frame, area: Rect) {
+fn render_title(frame: &mut Frame, app: &App, area: Rect) {
+    let path = if app.current_path.is_empty() {
+        "~/biblioteca".to_string()
+    } else {
+        format!("~/biblioteca/{}", app.current_path)
+    };
+
     let title = Paragraph::new(Line::from(vec![
         Span::styled(" basalto", bold_cyan()),
         Span::styled(" ◆ ", Style::default().fg(MAGENTA).add_modifier(Modifier::DIM)),
-        Span::styled("~/biblioteca", Style::default().fg(WHITE)),
+        Span::styled(path, Style::default().fg(WHITE)),
     ]));
     frame.render_widget(title, area);
 }
@@ -166,27 +173,29 @@ fn render_file_list(frame: &mut Frame, app: &mut App, area: Rect) {
             Span::styled("  ", dim())
         };
 
-        let num = Span::styled(
-            format!("{:>3} ", i + 1),
-            if selected { accent() } else { dim() },
-        );
-
-        // Icon: ▸ for folders (yellow), · for files (dim)
-        let icon = if is_dir {
-            Span::styled("▸ ", Style::default().fg(YELLOW))
+        let num = if name == ".." {
+            Span::styled("    ", dim())
         } else {
-            Span::styled("· ", dim())
+            Span::styled(format!("{:>3} ", i + 1), if selected { accent() } else { dim() })
         };
 
-        let name_str = truncate(name, name_w.saturating_sub(2)); // -2 for icon
+        let (icon_char, icon_color) = icons::icon_for(name, is_dir);
+        let icon = Span::styled(
+            icon_char,
+            Style::default().fg(if selected { icon_color } else { icon_color }).add_modifier(
+                if selected { Modifier::BOLD } else { Modifier::empty() }
+            ),
+        );
+
+        let name_display = if name == ".." { "..".to_string() } else { name.clone() };
+        let name_str = truncate(&name_display, name_w.saturating_sub(2));
         let name_span = Span::styled(
             format!("{:<w$}  ", name_str, w = name_w.saturating_sub(2)),
-            if is_dir {
-                if selected {
-                    Style::default().fg(YELLOW).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(YELLOW)
-                }
+            if name == ".." {
+                dim()
+            } else if is_dir {
+                if selected { Style::default().fg(YELLOW).add_modifier(Modifier::BOLD) }
+                else { Style::default().fg(YELLOW) }
             } else if selected {
                 bold_cyan()
             } else {
@@ -204,11 +213,8 @@ fn render_file_list(frame: &mut Frame, app: &mut App, area: Rect) {
         let tags_str = truncate(&tags_raw, tags_w);
         let tags_span = Span::styled(
             tags_str,
-            if selected {
-                Style::default().fg(YELLOW)
-            } else {
-                Style::default().fg(CYAN).add_modifier(Modifier::DIM)
-            },
+            if selected { Style::default().fg(YELLOW) }
+            else { Style::default().fg(CYAN).add_modifier(Modifier::DIM) },
         );
 
         lines.push(Line::from(vec![indicator, num, icon, name_span, desc_span, tags_span]));

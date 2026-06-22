@@ -1,6 +1,5 @@
 use crate::index::{self, EntryMeta};
 use ratatui::layout::Rect;
-use std::collections::HashMap;
 
 pub struct App {
     pub entries: Vec<(String, EntryMeta)>,
@@ -9,19 +8,21 @@ pub struct App {
     pub tags: Vec<(String, usize)>,
     pub preview_lines: Vec<String>,
     pub preview_git_info: String,
-    // Rect of the file list — updated each frame, used for mouse clicks
     pub list_area: Rect,
+    pub current_path: String,              // relative to lib root, empty = root
+    path_stack: Vec<(String, usize)>,      // (path, selected_idx) for back navigation
     lib_path: String,
 }
 
 impl App {
     pub fn new() -> Self {
-        let entries = index::load();
-        let tags = collect_tags(&entries);
         let lib_path = {
             let home = dirs::home_dir().unwrap();
             format!("{}/.basalto/cache/library", home.to_str().unwrap())
         };
+        let tags = index::load_all_tags();
+        let entries = index::load_dir("");
+
         let mut app = App {
             entries,
             selected: 0,
@@ -30,6 +31,8 @@ impl App {
             preview_lines: Vec::new(),
             preview_git_info: String::new(),
             list_area: Rect::default(),
+            current_path: String::new(),
+            path_stack: Vec::new(),
             lib_path,
         };
         app.load_preview();
@@ -50,13 +53,44 @@ impl App {
         }
     }
 
+    // Enter on a folder navigates into it; on ".." goes back; on a file opens it
+    pub fn enter_selected(&mut self) {
+        let Some((name, meta)) = self.entries.get(self.selected) else { return; };
+
+        if name == ".." {
+            self.navigate_up();
+            return;
+        }
+
+        if meta.is_dir {
+            let new_path = if self.current_path.is_empty() {
+                name.clone()
+            } else {
+                format!("{}/{}", self.current_path, name)
+            };
+            self.path_stack.push((self.current_path.clone(), self.selected));
+            self.current_path = new_path;
+            self.selected = 0;
+            self.reload();
+        }
+        // File: open in editor (TODO)
+    }
+
+    pub fn navigate_up(&mut self) {
+        if let Some((prev_path, prev_idx)) = self.path_stack.pop() {
+            self.current_path = prev_path;
+            self.selected = prev_idx;
+            self.reload();
+        }
+    }
+
     pub fn handle_click(&mut self, x: u16, y: u16) {
         let a = self.list_area;
         if a == Rect::default() { return; }
         if x < a.x || x >= a.x + a.width || y < a.y || y >= a.y + a.height { return; }
 
         let height = a.height as usize;
-        let scroll = if self.selected >= height { self.selected - height + 1 } else { 0 };
+        let scroll  = if self.selected >= height { self.selected - height + 1 } else { 0 };
         let clicked = scroll + (y - a.y) as usize;
 
         if clicked < self.entries.len() {
@@ -65,46 +99,68 @@ impl App {
         }
     }
 
+    fn reload(&mut self) {
+        self.entries = index::load_dir(&self.current_path);
+        if self.selected >= self.entries.len() {
+            self.selected = self.entries.len().saturating_sub(1);
+        }
+        self.load_preview();
+    }
+
     fn load_preview(&mut self) {
-        let Some((name, _)) = self.entries.get(self.selected) else {
+        let Some((name, meta)) = self.entries.get(self.selected) else {
             self.preview_lines = Vec::new();
             self.preview_git_info = String::new();
             return;
         };
 
-        let file_path = format!("{}/{}", self.lib_path, name);
-
-        let full_path = std::path::Path::new(&file_path);
-
-        if full_path.is_dir() {
-            // Show directory contents as preview
+        if name == ".." {
+            self.preview_lines = vec![format!(
+                "← volver a: /{}",
+                self.path_stack.last().map(|(p, _)| p.as_str()).unwrap_or("biblioteca")
+            )];
             self.preview_git_info = String::new();
-            self.preview_lines = std::fs::read_dir(&file_path)
+            return;
+        }
+
+        let full = self.full_path(name);
+        let path = std::path::Path::new(&full);
+
+        if meta.is_dir || path.is_dir() {
+            self.preview_git_info = String::new();
+            self.preview_lines = std::fs::read_dir(&full)
                 .ok()
                 .map(|rd| {
-                    let mut entries: Vec<_> = rd.flatten().collect();
-                    entries.sort_by_key(|e| e.file_name());
-                    entries
+                    let mut items: Vec<_> = rd.flatten().collect();
+                    items.sort_by_key(|e| e.file_name());
+                    items
                         .iter()
                         .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
                         .map(|e| {
-                            let is_dir = e.path().is_dir();
-                            let icon = if is_dir { "▸ " } else { "· " };
+                            let (icon, _) = crate::icons::icon_for(
+                                &e.file_name().to_string_lossy(),
+                                e.path().is_dir(),
+                            );
                             format!("{}{}", icon, e.file_name().to_string_lossy())
                         })
                         .collect()
                 })
                 .unwrap_or_default();
         } else {
-            self.preview_lines = std::fs::read_to_string(&file_path)
+            self.preview_lines = std::fs::read_to_string(&full)
                 .unwrap_or_default()
                 .lines()
                 .map(|l| l.to_string())
                 .collect();
 
-            // git log -1 on the file — empty string if not a git repo yet
+            let rel_path = if self.current_path.is_empty() {
+                name.to_string()
+            } else {
+                format!("{}/{}", self.current_path, name)
+            };
+
             self.preview_git_info = std::process::Command::new("git")
-                .args(["log", "-1", "--format=%h · %cr", "--", name])
+                .args(["log", "-1", "--format=%h · %cr", "--", &rel_path])
                 .current_dir(&self.lib_path)
                 .output()
                 .ok()
@@ -114,16 +170,12 @@ impl App {
                 .to_string();
         }
     }
-}
 
-fn collect_tags(entries: &[(String, EntryMeta)]) -> Vec<(String, usize)> {
-    let mut counts: HashMap<String, usize> = HashMap::new();
-    for (_, meta) in entries {
-        for tag in &meta.tags {
-            *counts.entry(tag.clone()).or_insert(0) += 1;
+    pub fn full_path(&self, name: &str) -> String {
+        if self.current_path.is_empty() {
+            format!("{}/{}", self.lib_path, name)
+        } else {
+            format!("{}/{}/{}", self.lib_path, self.current_path, name)
         }
     }
-    let mut tags: Vec<(String, usize)> = counts.into_iter().collect();
-    tags.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-    tags
 }

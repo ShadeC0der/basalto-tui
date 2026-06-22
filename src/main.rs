@@ -10,6 +10,7 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io;
 
 mod app;
+mod icons;
 mod index;
 mod ui;
 
@@ -44,9 +45,11 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> 
             Event::Key(key) => {
                 if key.kind != KeyEventKind::Press { continue; }
                 match key.code {
-                    KeyCode::Char('q') => return Ok(()),
+                    KeyCode::Char('q')              => return Ok(()),
                     KeyCode::Char('j') | KeyCode::Down  => app.move_down(),
                     KeyCode::Char('k') | KeyCode::Up    => app.move_up(),
+                    KeyCode::Enter                       => app.enter_selected(),
+                    KeyCode::Backspace | KeyCode::Char('-') => app.navigate_up(),
                     _ => {}
                 }
             }
