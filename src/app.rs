@@ -1,4 +1,5 @@
 use crate::index::{self, EntryMeta};
+use ratatui::layout::Rect;
 use std::collections::HashMap;
 
 pub struct App {
@@ -8,6 +9,8 @@ pub struct App {
     pub tags: Vec<(String, usize)>,
     pub preview_lines: Vec<String>,
     pub preview_git_info: String,
+    // Rect of the file list — updated each frame, used for mouse clicks
+    pub list_area: Rect,
     lib_path: String,
 }
 
@@ -26,6 +29,7 @@ impl App {
             tags,
             preview_lines: Vec::new(),
             preview_git_info: String::new(),
+            list_area: Rect::default(),
             lib_path,
         };
         app.load_preview();
@@ -42,6 +46,21 @@ impl App {
     pub fn move_up(&mut self) {
         if self.selected > 0 {
             self.selected -= 1;
+            self.load_preview();
+        }
+    }
+
+    pub fn handle_click(&mut self, x: u16, y: u16) {
+        let a = self.list_area;
+        if a == Rect::default() { return; }
+        if x < a.x || x >= a.x + a.width || y < a.y || y >= a.y + a.height { return; }
+
+        let height = a.height as usize;
+        let scroll = if self.selected >= height { self.selected - height + 1 } else { 0 };
+        let clicked = scroll + (y - a.y) as usize;
+
+        if clicked < self.entries.len() {
+            self.selected = clicked;
             self.load_preview();
         }
     }

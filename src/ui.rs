@@ -23,7 +23,7 @@ fn bold_cyan() -> Style { Style::default().fg(CYAN).add_modifier(Modifier::BOLD)
 
 // ─── Entry point ────────────────────────────────────────────────────────────
 
-pub fn render(frame: &mut Frame, app: &App) {
+pub fn render(frame: &mut Frame, app: &mut App) {
     let area = frame.area();
 
     let root = Layout::default()
@@ -60,7 +60,7 @@ fn render_title(frame: &mut Frame, area: Rect) {
 
 // ─── Sidebar ────────────────────────────────────────────────────────────────
 
-fn render_sidebar(frame: &mut Frame, app: &App, area: Rect) {
+fn render_sidebar(frame: &mut Frame, app: &mut App, area: Rect) {
     let border = Block::default()
         .borders(Borders::RIGHT)
         .border_style(Style::default().fg(CYAN).add_modifier(Modifier::DIM));
@@ -100,7 +100,7 @@ fn render_sidebar(frame: &mut Frame, app: &App, area: Rect) {
 
 // ─── Main area ──────────────────────────────────────────────────────────────
 
-fn render_main(frame: &mut Frame, app: &App, area: Rect) {
+fn render_main(frame: &mut Frame, app: &mut App, area: Rect) {
     let main_area = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -133,7 +133,9 @@ fn render_main(frame: &mut Frame, app: &App, area: Rect) {
 
 // ─── File list ──────────────────────────────────────────────────────────────
 
-fn render_file_list(frame: &mut Frame, app: &App, area: Rect) {
+fn render_file_list(frame: &mut Frame, app: &mut App, area: Rect) {
+    app.list_area = area;
+
     if app.entries.is_empty() {
         let msg = Paragraph::new(Span::styled(
             "  biblioteca vacía — usa basalto add para agregar archivos",
@@ -203,7 +205,7 @@ fn render_file_list(frame: &mut Frame, app: &App, area: Rect) {
 
 // ─── Preview ────────────────────────────────────────────────────────────────
 
-fn render_preview(frame: &mut Frame, app: &App, area: Rect) {
+fn render_preview(frame: &mut Frame, app: &mut App, area: Rect) {
     let block = Block::default()
         .borders(Borders::TOP)
         .border_style(Style::default().fg(CYAN).add_modifier(Modifier::DIM));
@@ -245,7 +247,7 @@ fn render_preview(frame: &mut Frame, app: &App, area: Rect) {
 
 // ─── Status bar ─────────────────────────────────────────────────────────────
 
-fn render_status(frame: &mut Frame, app: &App, area: Rect) {
+fn render_status(frame: &mut Frame, app: &mut App, area: Rect) {
     let zones = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(1), Constraint::Length(1)])
