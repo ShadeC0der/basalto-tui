@@ -75,13 +75,29 @@ fn render_sidebar(frame: &mut Frame, app: &mut App, area: Rect) {
 
     let mut lines = vec![
         Line::from(Span::styled("PLUGINS", dim().add_modifier(Modifier::BOLD))),
-        Line::from(vec![
-            Span::styled(" ◆ ", Style::default().fg(CYAN).add_modifier(Modifier::DIM)),
-            Span::styled("biblioteca", bold_cyan()),
-        ]),
-        Line::from(Span::raw("")),
-        Line::from(Span::styled("TAGS", dim().add_modifier(Modifier::BOLD))),
     ];
+
+    if app.plugins.is_empty() {
+        lines.push(Line::from(Span::styled("  sin plugins", dim())));
+    } else {
+        for plugin in &app.plugins {
+            let (dot, dot_color) = if plugin.enabled {
+                ("● ", GREEN)
+            } else {
+                ("○ ", DIM)
+            };
+            // strip "basalto-" prefix for display
+            let display = plugin.name.strip_prefix("basalto-").unwrap_or(&plugin.name);
+            lines.push(Line::from(vec![
+                Span::styled(" ", dim()),
+                Span::styled(dot, Style::default().fg(dot_color)),
+                Span::styled(display.to_string(), if plugin.enabled { accent() } else { dim() }),
+            ]));
+        }
+    }
+
+    lines.push(Line::from(Span::raw("")));
+    lines.push(Line::from(Span::styled("TAGS", dim().add_modifier(Modifier::BOLD))));
 
     if app.tags.is_empty() {
         lines.push(Line::from(Span::styled("  sin tags", dim())));

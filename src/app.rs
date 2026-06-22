@@ -1,4 +1,4 @@
-use crate::index::{self, EntryMeta};
+use crate::index::{self, EntryMeta, PluginInfo};
 use ratatui::layout::Rect;
 
 pub struct App {
@@ -6,6 +6,7 @@ pub struct App {
     pub selected: usize,
     pub tab: usize,
     pub tags: Vec<(String, usize)>,
+    pub plugins: Vec<PluginInfo>,
     pub preview_lines: Vec<String>,
     pub preview_git_info: String,
     pub list_area: Rect,
@@ -21,6 +22,7 @@ impl App {
             format!("{}/.basalto/cache/library", home.to_str().unwrap())
         };
         let tags = index::load_all_tags();
+        let plugins = index::load_plugins();
         let entries = index::load_dir("");
 
         let mut app = App {
@@ -28,6 +30,7 @@ impl App {
             selected: 0,
             tab: 0,
             tags,
+            plugins,
             preview_lines: Vec::new(),
             preview_git_info: String::new(),
             list_area: Rect::default(),

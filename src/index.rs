@@ -1,6 +1,66 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 
+// ─── Plugin list ─────────────────────────────────────────────────────────────
+
+pub struct PluginInfo {
+    pub name: String,
+    pub enabled: bool,
+}
+
+#[derive(Deserialize)]
+struct PluginToml {
+    #[serde(default = "default_true")]
+    enabled: bool,
+}
+
+fn default_true() -> bool { true }
+
+pub fn load_plugins() -> Vec<PluginInfo> {
+    let home = dirs::home_dir().unwrap();
+    let plugins_dir = format!("{}/.basalto/plugins", home.to_str().unwrap());
+
+    let mut list: Vec<PluginInfo> = std::fs::read_dir(&plugins_dir)
+        .ok()
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| {
+            let path = entry.path();
+            if path.extension()?.to_str()? != "toml" { return None; }
+            let stem = path.file_stem()?.to_str()?.to_string();
+            let text = std::fs::read_to_string(&path).ok()?;
+            let conf: PluginToml = toml::from_str(&text).ok()?;
+            Some(PluginInfo { name: stem, enabled: conf.enabled })
+        })
+        .collect();
+
+    list.sort_by(|a, b| a.name.cmp(&b.name));
+
+    // basalto-tui: check if configured in config.toml
+    let config_path = format!("{}/.basalto/config.toml", home.to_str().unwrap());
+    let tui_configured = std::fs::read_to_string(&config_path)
+        .ok()
+        .map(|c| c.contains("[tui]"))
+        .unwrap_or(false);
+    let tui_installed = which_basalto_tui();
+
+    list.push(PluginInfo {
+        name: "basalto-tui".to_string(),
+        enabled: tui_configured && tui_installed,
+    });
+
+    list
+}
+
+fn which_basalto_tui() -> bool {
+    std::process::Command::new("basalto-tui")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
 #[derive(Deserialize, Default, Clone)]
 pub struct EntryMeta {
     #[serde(default)]
