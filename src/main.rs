@@ -48,10 +48,9 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> 
                     KeyCode::Char('q') => return Ok(()),
                     KeyCode::Backspace | KeyCode::Char('-') => app.navigate_up(),
 
-                    // Enter: collapse section when sidebar focused, else navigate list
                     KeyCode::Enter => {
                         if app.sidebar_focused { app.sidebar_toggle_section() }
-                        else { app.enter_selected() }
+                        else { app.nav_enter() }
                     }
 
                     // Ctrl + any direction → toggle sidebar focus
@@ -61,15 +60,13 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> 
                         if key.modifiers.contains(KeyModifiers::CONTROL)
                         => app.toggle_sidebar_focus(),
 
-                    // Vertical movement: list or sidebar section depending on focus
                     KeyCode::Char('j') | KeyCode::Down => {
-                        if app.sidebar_focused { app.sidebar_nav_down() } else { app.move_down() }
+                        if app.sidebar_focused { app.sidebar_nav_down() } else { app.nav_down() }
                     }
                     KeyCode::Char('k') | KeyCode::Up => {
-                        if app.sidebar_focused { app.sidebar_nav_up() } else { app.move_up() }
+                        if app.sidebar_focused { app.sidebar_nav_up() } else { app.nav_up() }
                     }
 
-                    // Tab navigation (only when sidebar not focused)
                     KeyCode::Char('l') | KeyCode::Right
                         if !app.sidebar_focused => app.next_tab(),
                     KeyCode::Char('h') | KeyCode::Left
@@ -82,8 +79,8 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> 
                 MouseEventKind::Down(MouseButton::Left) => {
                     app.handle_click(mouse.column, mouse.row);
                 }
-                MouseEventKind::ScrollDown => app.move_down(),
-                MouseEventKind::ScrollUp   => app.move_up(),
+                MouseEventKind::ScrollDown => app.nav_down(),
+                MouseEventKind::ScrollUp   => app.nav_up(),
                 _ => {}
             },
             _ => {}

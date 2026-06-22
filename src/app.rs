@@ -1,4 +1,4 @@
-use crate::index::{self, EntryMeta, PluginInfo};
+use crate::index::{self, EntryMeta, LibraryEntry, PluginInfo};
 use ratatui::layout::Rect;
 
 pub enum SidebarRow {
@@ -9,69 +9,124 @@ pub enum SidebarRow {
 }
 
 pub struct App {
+    // ── Biblioteca tab ───────────────────────────────────────────────────────
     pub entries: Vec<(String, EntryMeta)>,
     pub selected: usize,
-    pub tab: usize,
-    pub tags: Vec<(String, usize)>,
-    pub plugins: Vec<PluginInfo>,
     pub preview_lines: Vec<String>,
     pub preview_git_info: String,
     pub list_area: Rect,
+    pub current_path: String,
+    path_stack: Vec<(String, usize)>,
+    lib_path: String,
+
+    // ── Bibliotecas tab ──────────────────────────────────────────────────────
+    pub libraries: Vec<LibraryEntry>,
+    pub active_library: String,
+    pub library_cursor: usize,
+
+    // ── Global ───────────────────────────────────────────────────────────────
+    pub tab: usize,
+    pub tags: Vec<(String, usize)>,
+    pub plugins: Vec<PluginInfo>,
+
+    // ── Sidebar ──────────────────────────────────────────────────────────────
     pub sidebar_focused: bool,
-    pub sidebar_cursor: usize,         // index into sidebar_items()
+    pub sidebar_cursor: usize,
     pub sidebar_collapsed: [bool; 3],
     pub sidebar_scroll: usize,
-    pub sidebar_height: u16,           // set by render each frame
-    pub current_path: String,              // relative to lib root, empty = root
-    path_stack: Vec<(String, usize)>,      // (path, selected_idx) for back navigation
-    lib_path: String,
+    pub sidebar_height: u16,
 }
 
 impl App {
     pub fn new() -> Self {
-        let lib_path = {
-            let home = dirs::home_dir().unwrap();
-            format!("{}/.basalto/cache/library", home.to_str().unwrap())
-        };
-        let tags = index::load_all_tags();
-        let plugins = index::load_plugins();
-        let entries = index::load_dir("");
+        let active_library = index::active_library();
+        let lib_path = index::lib_path();
+        let libraries  = index::load_libraries();
+        let tags       = index::load_all_tags();
+        let plugins    = index::load_plugins();
+        let entries    = index::load_dir("");
 
         let mut app = App {
             entries,
             selected: 0,
-            tab: 0,
-            tags,
-            plugins,
             preview_lines: Vec::new(),
             preview_git_info: String::new(),
             list_area: Rect::default(),
+            current_path: String::new(),
+            path_stack: Vec::new(),
+            lib_path,
+            libraries,
+            active_library,
+            library_cursor: 0,
+            tab: 0,
+            tags,
+            plugins,
             sidebar_focused: false,
             sidebar_cursor: 0,
             sidebar_collapsed: [false; 3],
             sidebar_scroll: 0,
             sidebar_height: 0,
-            current_path: String::new(),
-            path_stack: Vec::new(),
-            lib_path,
         };
         app.load_preview();
         app
     }
 
-    pub fn move_down(&mut self) {
+    // Unified navigation — behavior depends on active tab
+    pub fn nav_down(&mut self) {
+        match self.tab {
+            0 => { if self.library_cursor < self.libraries.len().saturating_sub(1) { self.library_cursor += 1; } }
+            _ => self.move_down(),
+        }
+    }
+
+    pub fn nav_up(&mut self) {
+        match self.tab {
+            0 => { if self.library_cursor > 0 { self.library_cursor -= 1; } }
+            _ => self.move_up(),
+        }
+    }
+
+    pub fn nav_enter(&mut self) {
+        match self.tab {
+            0 => self.switch_selected_library(),
+            _ => self.enter_selected(),
+        }
+    }
+
+    fn move_down(&mut self) {
         if !self.entries.is_empty() && self.selected < self.entries.len() - 1 {
             self.selected += 1;
             self.load_preview();
         }
     }
 
-    pub fn move_up(&mut self) {
+    fn move_up(&mut self) {
         if self.selected > 0 {
             self.selected -= 1;
             self.load_preview();
         }
     }
+
+    // ── Bibliotecas tab ──────────────────────────────────────────────────────
+
+    pub fn switch_selected_library(&mut self) {
+        let Some(lib) = self.libraries.get(self.library_cursor) else { return; };
+        let name = lib.name.clone();
+        index::write_active_library(&name);
+        self.active_library = name;
+        self.lib_path = index::lib_path();
+        self.current_path = String::new();
+        self.path_stack.clear();
+        self.selected = 0;
+        self.sidebar_cursor = 0;
+        self.sidebar_scroll = 0;
+        self.entries = index::load_dir("");
+        self.tags    = index::load_all_tags();
+        self.tab = 1; // jump to Biblioteca tab
+        self.load_preview();
+    }
+
+    // ── Biblioteca tab ───────────────────────────────────────────────────────
 
     // Enter on a folder navigates into it; on ".." goes back; on a file opens it
     pub fn enter_selected(&mut self) {
@@ -196,11 +251,11 @@ impl App {
     }
 
     pub fn next_tab(&mut self) {
-        self.tab = (self.tab + 1) % 4;
+        self.tab = (self.tab + 1) % 5;
     }
 
     pub fn prev_tab(&mut self) {
-        self.tab = (self.tab + 3) % 4;
+        self.tab = (self.tab + 4) % 5;
     }
 
     // All navigable items in order, respecting collapse state (no blanks)

@@ -197,7 +197,9 @@ fn render_main(frame: &mut Frame, app: &mut App, area: Rect) {
         ])
         .split(area);
 
-    let tabs = Tabs::new(vec![" biblioteca ", " nueva entrada ", " plugins ", " git/github "])
+    let tabs = Tabs::new(vec![
+        " bibliotecas ", " biblioteca ", " nueva entrada ", " git/github ", " plugins ",
+    ])
         .select(app.tab)
         .style(dim())
         .highlight_style(bold_cyan())
@@ -209,13 +211,18 @@ fn render_main(frame: &mut Frame, app: &mut App, area: Rect) {
         main_area[1],
     );
 
-    let content = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(4), Constraint::Length(12)])
-        .split(main_area[2]);
-
-    render_file_list(frame, app, content[0]);
-    render_preview(frame, app, content[1]);
+    match app.tab {
+        0 => render_bibliotecas(frame, app, main_area[2]),
+        1 => {
+            let content = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Min(4), Constraint::Length(12)])
+                .split(main_area[2]);
+            render_file_list(frame, app, content[0]);
+            render_preview(frame, app, content[1]);
+        }
+        _ => render_placeholder(frame, main_area[2]),
+    }
 }
 
 // ─── File list ──────────────────────────────────────────────────────────────
@@ -391,6 +398,79 @@ fn render_status(frame: &mut Frame, app: &mut App, area: Rect) {
         ]))
     };
     frame.render_widget(keys, zones[1]);
+}
+
+// ─── Bibliotecas tab ────────────────────────────────────────────────────────
+
+fn render_bibliotecas(frame: &mut Frame, app: &App, area: Rect) {
+    if app.libraries.is_empty() {
+        let msg = Paragraph::new(Span::styled(
+            "  sin bibliotecas configuradas — agrega [[libraries.list]] en config.toml",
+            Style::default().fg(Color::DarkGray),
+        ));
+        frame.render_widget(msg, area);
+        return;
+    }
+
+    let width = area.width as usize;
+
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(Line::from(Span::raw("")));
+
+    for (i, lib) in app.libraries.iter().enumerate() {
+        let selected  = i == app.library_cursor;
+        let is_active = lib.name == app.active_library;
+
+        let indicator = if selected {
+            Span::styled("▶ ", bold_cyan())
+        } else {
+            Span::styled("  ", Style::default().fg(Color::DarkGray))
+        };
+
+        let name_style = if selected {
+            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+        };
+
+        let badge = if is_active {
+            Span::styled(" ● activa ", Style::default().fg(Color::Black).bg(Color::Cyan))
+        } else {
+            Span::styled("          ", Style::default())
+        };
+
+        let source_max = width.saturating_sub(4 + lib.name.len() + 12);
+        let source = truncate(&lib.source, source_max);
+        let source_span = Span::styled(
+            format!("  {}", source),
+            Style::default().fg(Color::DarkGray),
+        );
+
+        lines.push(Line::from(vec![
+            indicator,
+            Span::styled(lib.name.clone(), name_style),
+            badge,
+            source_span,
+        ]));
+    }
+
+    lines.push(Line::from(Span::raw("")));
+    lines.push(Line::from(vec![
+        Span::styled("  enter", Style::default().fg(Color::Cyan)),
+        Span::styled(" cambiar biblioteca activa", Style::default().fg(Color::DarkGray)),
+    ]));
+
+    frame.render_widget(Paragraph::new(lines), area);
+}
+
+// ─── Placeholder ────────────────────────────────────────────────────────────
+
+fn render_placeholder(frame: &mut Frame, area: Rect) {
+    let msg = Paragraph::new(Span::styled(
+        "  próximamente",
+        Style::default().fg(Color::DarkGray),
+    ));
+    frame.render_widget(msg, area);
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
