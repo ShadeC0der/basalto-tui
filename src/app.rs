@@ -74,22 +74,45 @@ impl App {
 
         let file_path = format!("{}/{}", self.lib_path, name);
 
-        self.preview_lines = std::fs::read_to_string(&file_path)
-            .unwrap_or_default()
-            .lines()
-            .map(|l| l.to_string())
-            .collect();
+        let full_path = std::path::Path::new(&file_path);
 
-        // git log -1 on the file — empty string if not a git repo yet
-        self.preview_git_info = std::process::Command::new("git")
-            .args(["log", "-1", "--format=%h · %cr", "--", name])
-            .current_dir(&self.lib_path)
-            .output()
-            .ok()
-            .and_then(|o| String::from_utf8(o.stdout).ok())
-            .unwrap_or_default()
-            .trim()
-            .to_string();
+        if full_path.is_dir() {
+            // Show directory contents as preview
+            self.preview_git_info = String::new();
+            self.preview_lines = std::fs::read_dir(&file_path)
+                .ok()
+                .map(|rd| {
+                    let mut entries: Vec<_> = rd.flatten().collect();
+                    entries.sort_by_key(|e| e.file_name());
+                    entries
+                        .iter()
+                        .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
+                        .map(|e| {
+                            let is_dir = e.path().is_dir();
+                            let icon = if is_dir { "▸ " } else { "· " };
+                            format!("{}{}", icon, e.file_name().to_string_lossy())
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+        } else {
+            self.preview_lines = std::fs::read_to_string(&file_path)
+                .unwrap_or_default()
+                .lines()
+                .map(|l| l.to_string())
+                .collect();
+
+            // git log -1 on the file — empty string if not a git repo yet
+            self.preview_git_info = std::process::Command::new("git")
+                .args(["log", "-1", "--format=%h · %cr", "--", name])
+                .current_dir(&self.lib_path)
+                .output()
+                .ok()
+                .and_then(|o| String::from_utf8(o.stdout).ok())
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+        }
     }
 }
 

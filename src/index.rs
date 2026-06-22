@@ -7,6 +7,8 @@ pub struct EntryMeta {
     pub description: String,
     #[serde(default)]
     pub tags: Vec<String>,
+    #[serde(default, skip)]
+    pub is_dir: bool,
     #[serde(default)]
     #[allow(dead_code)]
     pub usos: u32,
@@ -21,20 +23,26 @@ struct LibraryIndex {
     files: HashMap<String, EntryMeta>,
 }
 
-// Loads index entries merged with filesystem files.
-// Files not in the index appear with empty metadata.
+// Merges index metadata with filesystem scan.
+// Entries not in the index appear with empty metadata.
+// Folders appear before files, both groups sorted alphabetically.
 pub fn load() -> Vec<(String, EntryMeta)> {
     let mut indexed = read_index();
 
     let lib = lib_path();
-    let fs_files = scan_files(&lib, &lib);
-
-    for path in fs_files {
-        indexed.entry(path).or_insert_with(EntryMeta::default);
+    for (path, is_dir) in scan_entries(&lib, &lib) {
+        let meta = indexed.entry(path).or_insert_with(EntryMeta::default);
+        meta.is_dir = is_dir;
     }
 
     let mut entries: Vec<(String, EntryMeta)> = indexed.into_iter().collect();
-    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    entries.sort_by(|a, b| {
+        match (a.1.is_dir, b.1.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.0.cmp(&b.0),
+        }
+    });
     entries
 }
 
@@ -46,11 +54,11 @@ fn read_index() -> HashMap<String, EntryMeta> {
         .files
 }
 
-// Recursively collect all file paths relative to `root`.
-fn scan_files(dir: &str, root: &str) -> Vec<String> {
-    let mut files = Vec::new();
+// Recursively collect files and top-level directories relative to root.
+fn scan_entries(dir: &str, root: &str) -> Vec<(String, bool)> {
+    let mut result = Vec::new();
     let Ok(entries) = std::fs::read_dir(dir) else {
-        return files;
+        return result;
     };
 
     let mut entries: Vec<_> = entries.flatten().collect();
@@ -58,22 +66,23 @@ fn scan_files(dir: &str, root: &str) -> Vec<String> {
 
     for entry in entries {
         let path = entry.path();
-        // Skip hidden files and git internals
-        let name = entry.file_name();
-        if name.to_string_lossy().starts_with('.') {
+        if entry.file_name().to_string_lossy().starts_with('.') {
             continue;
         }
+
+        let relative = path
+            .to_string_lossy()
+            .trim_start_matches(&format!("{}/", root))
+            .to_string();
+
         if path.is_dir() {
-            files.extend(scan_files(&path.to_string_lossy(), root));
+            result.push((relative.clone(), true));
+            result.extend(scan_entries(&path.to_string_lossy(), root));
         } else {
-            let relative = path
-                .to_string_lossy()
-                .trim_start_matches(&format!("{}/", root))
-                .to_string();
-            files.push(relative);
+            result.push((relative, false));
         }
     }
-    files
+    result
 }
 
 pub fn lib_path() -> String {

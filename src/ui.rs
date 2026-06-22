@@ -158,6 +158,7 @@ fn render_file_list(frame: &mut Frame, app: &mut App, area: Rect) {
 
     for (i, (name, meta)) in app.entries.iter().enumerate().skip(scroll).take(height) {
         let selected = i == app.selected;
+        let is_dir   = meta.is_dir;
 
         let indicator = if selected {
             Span::styled("▶ ", bold_cyan())
@@ -170,10 +171,23 @@ fn render_file_list(frame: &mut Frame, app: &mut App, area: Rect) {
             if selected { accent() } else { dim() },
         );
 
-        let name_str = truncate(name, name_w);
+        // Icon: ▸ for folders (yellow), · for files (dim)
+        let icon = if is_dir {
+            Span::styled("▸ ", Style::default().fg(YELLOW))
+        } else {
+            Span::styled("· ", dim())
+        };
+
+        let name_str = truncate(name, name_w.saturating_sub(2)); // -2 for icon
         let name_span = Span::styled(
-            format!("{:<w$}  ", name_str, w = name_w),
-            if selected {
+            format!("{:<w$}  ", name_str, w = name_w.saturating_sub(2)),
+            if is_dir {
+                if selected {
+                    Style::default().fg(YELLOW).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(YELLOW)
+                }
+            } else if selected {
                 bold_cyan()
             } else {
                 Style::default().fg(WHITE).add_modifier(Modifier::BOLD)
@@ -197,7 +211,7 @@ fn render_file_list(frame: &mut Frame, app: &mut App, area: Rect) {
             },
         );
 
-        lines.push(Line::from(vec![indicator, num, name_span, desc_span, tags_span]));
+        lines.push(Line::from(vec![indicator, num, icon, name_span, desc_span, tags_span]));
     }
 
     frame.render_widget(Paragraph::new(lines), area);
