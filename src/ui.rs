@@ -1,7 +1,7 @@
 use crate::app::App;
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Tabs},
@@ -96,7 +96,14 @@ fn render_main(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         .border_style(Style::default().fg(Color::DarkGray));
     frame.render_widget(separator, main_area[1]);
 
-    render_file_list(frame, app, main_area[2]);
+    // Split content area: file list (flexible) + preview (fixed 12 lines)
+    let content_area = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(4), Constraint::Length(12)])
+        .split(main_area[2]);
+
+    render_file_list(frame, app, content_area[0]);
+    render_preview(frame, app, content_area[1]);
 }
 
 fn render_file_list(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
@@ -170,6 +177,54 @@ fn render_file_list(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 
     let list = Paragraph::new(lines);
     frame.render_widget(list, area);
+}
+
+fn render_preview(frame: &mut Frame, app: &App, area: Rect) {
+    let block = Block::default()
+        .borders(Borders::TOP)
+        .border_style(Style::default().fg(Color::DarkGray));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    if app.entries.is_empty() {
+        return;
+    }
+
+    let filename = &app.entries[app.selected].0;
+    let visible_lines = inner.height.saturating_sub(1) as usize; // -1 for header line
+
+    // Header line
+    let mut lines = vec![Line::from(vec![
+        Span::styled(" VISTA PREVIA ", Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("— {} ", filename), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            if app.preview_git_info.is_empty() {
+                String::new()
+            } else {
+                format!(" {}", app.preview_git_info)
+            },
+            Style::default().fg(Color::DarkGray),
+        ),
+    ])];
+
+    if app.preview_lines.is_empty() {
+        lines.push(Line::from(Span::styled(
+            " (archivo vacío)",
+            Style::default().fg(Color::DarkGray),
+        )));
+    } else {
+        let width = inner.width.saturating_sub(1) as usize;
+        for line in app.preview_lines.iter().take(visible_lines) {
+            lines.push(Line::from(Span::styled(
+                format!(" {}", truncate(line, width)),
+                Style::default().fg(Color::White),
+            )));
+        }
+    }
+
+    let preview = Paragraph::new(lines);
+    frame.render_widget(preview, inner);
 }
 
 fn render_status(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
