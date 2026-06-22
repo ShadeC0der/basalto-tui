@@ -335,11 +335,11 @@ fn render_status(frame: &mut Frame, app: &mut App, area: Rect) {
     frame.render_widget(status, zones[0]);
 
     let keys = Paragraph::new(Line::from(vec![
-        Span::styled(" ↑↓/jk", accent()),
-        Span::styled(" nav    ", dim()),
-        Span::styled("enter", accent()),
-        Span::styled(" abrir    ", dim()),
-        Span::styled("[/]", accent()),
+        Span::styled(" jk/↑↓", accent()),
+        Span::styled(" lista    ", dim()),
+        Span::styled("hl/←→", accent()),
+        Span::styled(" tabs    ", dim()),
+        Span::styled("^jk/^↑↓", accent()),
         Span::styled(" sidebar    ", dim()),
         Span::styled("q", Style::default().fg(Color::Red)),
         Span::styled(" salir", dim()),

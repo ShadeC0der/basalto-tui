@@ -1,7 +1,7 @@
 use crossterm::{
     event::{
         self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind,
-        MouseButton, MouseEventKind,
+        KeyModifiers, MouseButton, MouseEventKind,
     },
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
@@ -45,13 +45,30 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> 
             Event::Key(key) => {
                 if key.kind != KeyEventKind::Press { continue; }
                 match key.code {
-                    KeyCode::Char('q')              => return Ok(()),
-                    KeyCode::Char('j') | KeyCode::Down  => app.move_down(),
-                    KeyCode::Char('k') | KeyCode::Up    => app.move_up(),
-                    KeyCode::Enter                       => app.enter_selected(),
+                    KeyCode::Char('q') => return Ok(()),
+                    KeyCode::Enter     => app.enter_selected(),
                     KeyCode::Backspace | KeyCode::Char('-') => app.navigate_up(),
-                    KeyCode::Char('[')                   => app.sidebar_up(),
-                    KeyCode::Char(']')                   => app.sidebar_down(),
+
+                    // List navigation (no modifier)
+                    KeyCode::Char('j') | KeyCode::Down
+                        if !key.modifiers.contains(KeyModifiers::CONTROL)
+                        => app.move_down(),
+                    KeyCode::Char('k') | KeyCode::Up
+                        if !key.modifiers.contains(KeyModifiers::CONTROL)
+                        => app.move_up(),
+
+                    // Sidebar scroll (Ctrl held)
+                    KeyCode::Char('j') | KeyCode::Down
+                        if key.modifiers.contains(KeyModifiers::CONTROL)
+                        => app.sidebar_down(),
+                    KeyCode::Char('k') | KeyCode::Up
+                        if key.modifiers.contains(KeyModifiers::CONTROL)
+                        => app.sidebar_up(),
+
+                    // Tab navigation
+                    KeyCode::Char('l') | KeyCode::Right => app.next_tab(),
+                    KeyCode::Char('h') | KeyCode::Left  => app.prev_tab(),
+
                     _ => {}
                 }
             }

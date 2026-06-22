@@ -176,6 +176,14 @@ impl App {
         }
     }
 
+    pub fn next_tab(&mut self) {
+        self.tab = (self.tab + 1) % 4;
+    }
+
+    pub fn prev_tab(&mut self) {
+        self.tab = (self.tab + 3) % 4;
+    }
+
     pub fn sidebar_up(&mut self) {
         self.sidebar_scroll = self.sidebar_scroll.saturating_sub(1);
     }
