@@ -11,6 +11,11 @@ mod index;
 mod ui;
 
 fn main() -> io::Result<()> {
+    if std::env::args().any(|a| a == "--version") {
+        println!("basalto-tui v{}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
