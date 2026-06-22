@@ -13,6 +13,8 @@ pub struct App {
     pub sidebar_focused: bool,
     pub sidebar_section: usize,        // 0=plugins 1=tags 2=git
     pub sidebar_collapsed: [bool; 3],
+    pub sidebar_scroll: usize,
+    pub sidebar_height: u16,           // set by render each frame
     pub current_path: String,              // relative to lib root, empty = root
     path_stack: Vec<(String, usize)>,      // (path, selected_idx) for back navigation
     lib_path: String,
@@ -40,6 +42,8 @@ impl App {
             sidebar_focused: false,
             sidebar_section: 0,
             sidebar_collapsed: [false; 3],
+            sidebar_scroll: 0,
+            sidebar_height: 0,
             current_path: String::new(),
             path_stack: Vec::new(),
             lib_path,
@@ -193,16 +197,54 @@ impl App {
     }
 
     pub fn sidebar_nav_up(&mut self) {
-        if self.sidebar_section > 0 { self.sidebar_section -= 1; }
+        if self.sidebar_section > 0 {
+            self.sidebar_section -= 1;
+            self.scroll_to_section();
+        }
     }
 
     pub fn sidebar_nav_down(&mut self) {
-        if self.sidebar_section < 2 { self.sidebar_section += 1; }
+        if self.sidebar_section < 2 {
+            self.sidebar_section += 1;
+            self.scroll_to_section();
+        }
     }
 
     pub fn sidebar_toggle_section(&mut self) {
         let i = self.sidebar_section;
         self.sidebar_collapsed[i] = !self.sidebar_collapsed[i];
+        self.scroll_to_section();
+    }
+
+    // Line index of each section header in the rendered paragraph
+    fn section_line(&self, section: usize) -> usize {
+        let plugins_body = if self.sidebar_collapsed[0] { 0 }
+            else if self.plugins.is_empty() { 1 }
+            else { self.plugins.len() };
+
+        let tags_body = if self.sidebar_collapsed[1] { 0 }
+            else if self.tags.is_empty() { 1 }
+            else { self.tags.len() };
+
+        match section {
+            0 => 0,
+            1 => 1 + plugins_body + 1,             // plugins header + body + blank
+            2 => 1 + plugins_body + 1 + 1 + tags_body + 1, // + tags header + body + blank
+            _ => 0,
+        }
+    }
+
+    // Scroll sidebar so the selected section header is visible
+    fn scroll_to_section(&mut self) {
+        let line    = self.section_line(self.sidebar_section);
+        let visible = self.sidebar_height as usize;
+        if visible == 0 { return; }
+
+        if line < self.sidebar_scroll {
+            self.sidebar_scroll = line;
+        } else if line >= self.sidebar_scroll + visible {
+            self.sidebar_scroll = line.saturating_sub(visible - 1);
+        }
     }
 
     pub fn full_path(&self, name: &str) -> String {

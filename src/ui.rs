@@ -79,6 +79,7 @@ fn render_sidebar(frame: &mut Frame, app: &mut App, area: Rect) {
     frame.render_widget(border, area);
 
     let content_area = Rect { width: area.width.saturating_sub(1), ..area };
+    app.sidebar_height = content_area.height;
 
     let focused = app.sidebar_focused;
     let section = app.sidebar_section;
@@ -148,7 +149,18 @@ fn render_sidebar(frame: &mut Frame, app: &mut App, area: Rect) {
         ]));
     }
 
-    frame.render_widget(Paragraph::new(lines), content_area);
+    // Clamp scroll so it never leaves blank space at the bottom
+    let total   = lines.len();
+    let visible = content_area.height as usize;
+    let max_scroll = total.saturating_sub(visible);
+    if app.sidebar_scroll > max_scroll {
+        app.sidebar_scroll = max_scroll;
+    }
+
+    frame.render_widget(
+        Paragraph::new(lines).scroll((app.sidebar_scroll as u16, 0)),
+        content_area,
+    );
 }
 
 // ─── Main area ──────────────────────────────────────────────────────────────
