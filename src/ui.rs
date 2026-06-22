@@ -2,7 +2,7 @@ use crate::app::App;
 use crate::icons;
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Tabs},
@@ -78,83 +78,77 @@ fn render_sidebar(frame: &mut Frame, app: &mut App, area: Rect) {
         .border_style(border_style);
     frame.render_widget(border, area);
 
-    // Leave 1 col for the right border; use the rest for content
-    let content_area = Rect {
-        width: area.width.saturating_sub(1),
-        ..area
+    let content_area = Rect { width: area.width.saturating_sub(1), ..area };
+
+    let focused = app.sidebar_focused;
+    let section = app.sidebar_section;
+    let collapsed = app.sidebar_collapsed;
+
+    let mut lines: Vec<Line> = Vec::new();
+
+    // ── helper closures ──────────────────────────────────────────────────────
+    let section_header = |label: &str, idx: usize| -> Line {
+        let is_selected = focused && section == idx;
+        let arrow = if collapsed[idx] { "▶ " } else { "▼ " };
+        let style = if is_selected {
+            Style::default().fg(CYAN).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(DIM).add_modifier(Modifier::BOLD)
+        };
+        Line::from(vec![
+            Span::styled(arrow, style),
+            Span::styled(label.to_string(), style),
+        ])
     };
-    let visible = content_area.height as usize;
 
-    let mut lines = vec![
-        Line::from(Span::styled("PLUGINS", dim().add_modifier(Modifier::BOLD))),
-    ];
-
-    if app.plugins.is_empty() {
-        lines.push(Line::from(Span::styled("  sin plugins", dim())));
-    } else {
-        for plugin in &app.plugins {
-            let (dot, dot_color) = if plugin.enabled { ("● ", GREEN) } else { ("○ ", DIM) };
-            let display = plugin.name.strip_prefix("basalto-").unwrap_or(&plugin.name);
-            lines.push(Line::from(vec![
-                Span::styled(" ", dim()),
-                Span::styled(dot, Style::default().fg(dot_color)),
-                Span::styled(display.to_string(), if plugin.enabled { accent() } else { dim() }),
-            ]));
+    // ── PLUGINS ──────────────────────────────────────────────────────────────
+    lines.push(section_header("PLUGINS", 0));
+    if !collapsed[0] {
+        if app.plugins.is_empty() {
+            lines.push(Line::from(Span::styled("  sin plugins", dim())));
+        } else {
+            for plugin in &app.plugins {
+                let (dot, dot_color) = if plugin.enabled { ("● ", GREEN) } else { ("○ ", DIM) };
+                let display = plugin.name.strip_prefix("basalto-").unwrap_or(&plugin.name);
+                lines.push(Line::from(vec![
+                    Span::styled("  ", dim()),
+                    Span::styled(dot, Style::default().fg(dot_color)),
+                    Span::styled(display.to_string(), if plugin.enabled { accent() } else { dim() }),
+                ]));
+            }
         }
     }
 
     lines.push(Line::from(Span::raw("")));
-    lines.push(Line::from(Span::styled("TAGS", dim().add_modifier(Modifier::BOLD))));
 
-    if app.tags.is_empty() {
-        lines.push(Line::from(Span::styled("  sin tags", dim())));
-    } else {
-        for (tag, count) in &app.tags {
-            lines.push(Line::from(vec![
-                Span::styled("  #", dim()),
-                Span::styled(tag.clone(), accent()),
-                Span::styled(format!(" {}", count), Style::default().fg(YELLOW).add_modifier(Modifier::DIM)),
-            ]));
+    // ── TAGS ─────────────────────────────────────────────────────────────────
+    lines.push(section_header("TAGS", 1));
+    if !collapsed[1] {
+        if app.tags.is_empty() {
+            lines.push(Line::from(Span::styled("  sin tags", dim())));
+        } else {
+            for (tag, count) in &app.tags {
+                lines.push(Line::from(vec![
+                    Span::styled("  #", dim()),
+                    Span::styled(tag.clone(), accent()),
+                    Span::styled(format!(" {}", count), Style::default().fg(YELLOW).add_modifier(Modifier::DIM)),
+                ]));
+            }
         }
     }
 
     lines.push(Line::from(Span::raw("")));
-    lines.push(Line::from(Span::styled("GIT", dim().add_modifier(Modifier::BOLD))));
-    lines.push(Line::from(vec![
-        Span::styled("  ● ", Style::default().fg(GREEN)),
-        Span::styled("main", Style::default().fg(WHITE)),
-    ]));
 
-    let total = lines.len();
-    // Clamp scroll so it never shows blank space at the bottom
-    let max_scroll = total.saturating_sub(visible);
-    if app.sidebar_scroll > max_scroll {
-        app.sidebar_scroll = max_scroll;
+    // ── GIT ──────────────────────────────────────────────────────────────────
+    lines.push(section_header("GIT", 2));
+    if !collapsed[2] {
+        lines.push(Line::from(vec![
+            Span::styled("  ● ", Style::default().fg(GREEN)),
+            Span::styled("main", Style::default().fg(WHITE)),
+        ]));
     }
 
-    // ↑ indicator on first visible line when scrolled
-    if app.sidebar_scroll > 0 {
-        lines[app.sidebar_scroll] = Line::from(Span::styled(
-            "  ↑ más arriba",
-            Style::default().fg(DIM),
-        ));
-    }
-    // ↓ indicator on last visible line when more content below
-    let last_visible = app.sidebar_scroll + visible;
-    if last_visible < total {
-        let idx = app.sidebar_scroll + visible - 1;
-        if idx < lines.len() {
-            lines[idx] = Line::from(Span::styled(
-                "  ↓ más abajo",
-                Style::default().fg(DIM),
-            ));
-        }
-    }
-
-    frame.render_widget(
-        Paragraph::new(lines).scroll((app.sidebar_scroll as u16, 0)),
-        content_area,
-    );
+    frame.render_widget(Paragraph::new(lines), content_area);
 }
 
 // ─── Main area ──────────────────────────────────────────────────────────────
@@ -339,21 +333,29 @@ fn render_status(frame: &mut Frame, app: &mut App, area: Rect) {
     ]));
     frame.render_widget(status, zones[0]);
 
-    let (ctrl_label, ctrl_hint) = if app.sidebar_focused {
-        ("^dir", " salir sidebar    ")
+    let keys = if app.sidebar_focused {
+        Paragraph::new(Line::from(vec![
+            Span::styled(" jk/↑↓", accent()),
+            Span::styled(" sección    ", dim()),
+            Span::styled("enter", accent()),
+            Span::styled(" colapsar    ", dim()),
+            Span::styled("^dir", accent()),
+            Span::styled(" salir sidebar    ", dim()),
+            Span::styled("q", Style::default().fg(Color::Red)),
+            Span::styled(" salir", dim()),
+        ]))
     } else {
-        ("^dir", " foco sidebar    ")
+        Paragraph::new(Line::from(vec![
+            Span::styled(" jk/↑↓", accent()),
+            Span::styled(" nav    ", dim()),
+            Span::styled("hl/←→", accent()),
+            Span::styled(" tabs    ", dim()),
+            Span::styled("^dir", accent()),
+            Span::styled(" sidebar    ", dim()),
+            Span::styled("q", Style::default().fg(Color::Red)),
+            Span::styled(" salir", dim()),
+        ]))
     };
-    let keys = Paragraph::new(Line::from(vec![
-        Span::styled(" jk/↑↓", accent()),
-        Span::styled(" nav    ", dim()),
-        Span::styled("hl/←→", accent()),
-        Span::styled(" tabs    ", dim()),
-        Span::styled(ctrl_label, accent()),
-        Span::styled(ctrl_hint, dim()),
-        Span::styled("q", Style::default().fg(Color::Red)),
-        Span::styled(" salir", dim()),
-    ])).alignment(Alignment::Left);
     frame.render_widget(keys, zones[1]);
 }
 

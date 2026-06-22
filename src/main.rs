@@ -46,8 +46,13 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> 
                 if key.kind != KeyEventKind::Press { continue; }
                 match key.code {
                     KeyCode::Char('q') => return Ok(()),
-                    KeyCode::Enter     => app.enter_selected(),
                     KeyCode::Backspace | KeyCode::Char('-') => app.navigate_up(),
+
+                    // Enter: collapse section when sidebar focused, else navigate list
+                    KeyCode::Enter => {
+                        if app.sidebar_focused { app.sidebar_toggle_section() }
+                        else { app.enter_selected() }
+                    }
 
                     // Ctrl + any direction → toggle sidebar focus
                     KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right
@@ -56,12 +61,12 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> 
                         if key.modifiers.contains(KeyModifiers::CONTROL)
                         => app.toggle_sidebar_focus(),
 
-                    // Movement depends on which panel has focus
+                    // Vertical movement: list or sidebar section depending on focus
                     KeyCode::Char('j') | KeyCode::Down => {
-                        if app.sidebar_focused { app.sidebar_down() } else { app.move_down() }
+                        if app.sidebar_focused { app.sidebar_nav_down() } else { app.move_down() }
                     }
                     KeyCode::Char('k') | KeyCode::Up => {
-                        if app.sidebar_focused { app.sidebar_up() } else { app.move_up() }
+                        if app.sidebar_focused { app.sidebar_nav_up() } else { app.move_up() }
                     }
 
                     // Tab navigation (only when sidebar not focused)
