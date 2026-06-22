@@ -10,6 +10,7 @@ pub struct App {
     pub preview_lines: Vec<String>,
     pub preview_git_info: String,
     pub list_area: Rect,
+    pub sidebar_scroll: usize,
     pub current_path: String,              // relative to lib root, empty = root
     path_stack: Vec<(String, usize)>,      // (path, selected_idx) for back navigation
     lib_path: String,
@@ -34,6 +35,7 @@ impl App {
             preview_lines: Vec::new(),
             preview_git_info: String::new(),
             list_area: Rect::default(),
+            sidebar_scroll: 0,
             current_path: String::new(),
             path_stack: Vec::new(),
             lib_path,
@@ -172,6 +174,24 @@ impl App {
                 .trim()
                 .to_string();
         }
+    }
+
+    pub fn sidebar_up(&mut self) {
+        self.sidebar_scroll = self.sidebar_scroll.saturating_sub(1);
+    }
+
+    pub fn sidebar_down(&mut self) {
+        let max = self.sidebar_total_lines().saturating_sub(1);
+        if self.sidebar_scroll < max {
+            self.sidebar_scroll += 1;
+        }
+    }
+
+    pub fn sidebar_total_lines(&self) -> usize {
+        let plugin_lines = if self.plugins.is_empty() { 1 } else { self.plugins.len() };
+        let tag_lines    = if self.tags.is_empty()    { 1 } else { self.tags.len() };
+        // PLUGINS + entries + blank + TAGS + entries + blank + GIT + branch
+        1 + plugin_lines + 1 + 1 + tag_lines + 1 + 1 + 1
     }
 
     pub fn full_path(&self, name: &str) -> String {

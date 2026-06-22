@@ -50,6 +50,8 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> 
                     KeyCode::Char('k') | KeyCode::Up    => app.move_up(),
                     KeyCode::Enter                       => app.enter_selected(),
                     KeyCode::Backspace | KeyCode::Char('-') => app.navigate_up(),
+                    KeyCode::Char('[')                   => app.sidebar_up(),
+                    KeyCode::Char(']')                   => app.sidebar_down(),
                     _ => {}
                 }
             }

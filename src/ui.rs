@@ -73,6 +73,13 @@ fn render_sidebar(frame: &mut Frame, app: &mut App, area: Rect) {
         .border_style(Style::default().fg(CYAN).add_modifier(Modifier::DIM));
     frame.render_widget(border, area);
 
+    // Leave 1 col for the right border; use the rest for content
+    let content_area = Rect {
+        width: area.width.saturating_sub(1),
+        ..area
+    };
+    let visible = content_area.height as usize;
+
     let mut lines = vec![
         Line::from(Span::styled("PLUGINS", dim().add_modifier(Modifier::BOLD))),
     ];
@@ -81,12 +88,7 @@ fn render_sidebar(frame: &mut Frame, app: &mut App, area: Rect) {
         lines.push(Line::from(Span::styled("  sin plugins", dim())));
     } else {
         for plugin in &app.plugins {
-            let (dot, dot_color) = if plugin.enabled {
-                ("● ", GREEN)
-            } else {
-                ("○ ", DIM)
-            };
-            // strip "basalto-" prefix for display
+            let (dot, dot_color) = if plugin.enabled { ("● ", GREEN) } else { ("○ ", DIM) };
             let display = plugin.name.strip_prefix("basalto-").unwrap_or(&plugin.name);
             lines.push(Line::from(vec![
                 Span::styled(" ", dim()),
@@ -118,7 +120,36 @@ fn render_sidebar(frame: &mut Frame, app: &mut App, area: Rect) {
         Span::styled("main", Style::default().fg(WHITE)),
     ]));
 
-    frame.render_widget(Paragraph::new(lines), area);
+    let total = lines.len();
+    // Clamp scroll so it never shows blank space at the bottom
+    let max_scroll = total.saturating_sub(visible);
+    if app.sidebar_scroll > max_scroll {
+        app.sidebar_scroll = max_scroll;
+    }
+
+    // ↑ indicator on first visible line when scrolled
+    if app.sidebar_scroll > 0 {
+        lines[app.sidebar_scroll] = Line::from(Span::styled(
+            "  ↑ más arriba",
+            Style::default().fg(DIM),
+        ));
+    }
+    // ↓ indicator on last visible line when more content below
+    let last_visible = app.sidebar_scroll + visible;
+    if last_visible < total {
+        let idx = app.sidebar_scroll + visible - 1;
+        if idx < lines.len() {
+            lines[idx] = Line::from(Span::styled(
+                "  ↓ más abajo",
+                Style::default().fg(DIM),
+            ));
+        }
+    }
+
+    frame.render_widget(
+        Paragraph::new(lines).scroll((app.sidebar_scroll as u16, 0)),
+        content_area,
+    );
 }
 
 // ─── Main area ──────────────────────────────────────────────────────────────
@@ -308,8 +339,8 @@ fn render_status(frame: &mut Frame, app: &mut App, area: Rect) {
         Span::styled(" nav    ", dim()),
         Span::styled("enter", accent()),
         Span::styled(" abrir    ", dim()),
-        Span::styled("n", accent()),
-        Span::styled(" nuevo    ", dim()),
+        Span::styled("[/]", accent()),
+        Span::styled(" sidebar    ", dim()),
         Span::styled("q", Style::default().fg(Color::Red)),
         Span::styled(" salir", dim()),
     ])).alignment(Alignment::Left);
