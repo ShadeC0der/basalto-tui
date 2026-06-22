@@ -49,25 +49,26 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> 
                     KeyCode::Enter     => app.enter_selected(),
                     KeyCode::Backspace | KeyCode::Char('-') => app.navigate_up(),
 
-                    // List navigation (no modifier)
-                    KeyCode::Char('j') | KeyCode::Down
-                        if !key.modifiers.contains(KeyModifiers::CONTROL)
-                        => app.move_down(),
-                    KeyCode::Char('k') | KeyCode::Up
-                        if !key.modifiers.contains(KeyModifiers::CONTROL)
-                        => app.move_up(),
-
-                    // Sidebar scroll (Ctrl held)
-                    KeyCode::Char('j') | KeyCode::Down
+                    // Ctrl + any direction → toggle sidebar focus
+                    KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right
+                    | KeyCode::Char('j') | KeyCode::Char('k')
+                    | KeyCode::Char('h') | KeyCode::Char('l')
                         if key.modifiers.contains(KeyModifiers::CONTROL)
-                        => app.sidebar_down(),
-                    KeyCode::Char('k') | KeyCode::Up
-                        if key.modifiers.contains(KeyModifiers::CONTROL)
-                        => app.sidebar_up(),
+                        => app.toggle_sidebar_focus(),
 
-                    // Tab navigation
-                    KeyCode::Char('l') | KeyCode::Right => app.next_tab(),
-                    KeyCode::Char('h') | KeyCode::Left  => app.prev_tab(),
+                    // Movement depends on which panel has focus
+                    KeyCode::Char('j') | KeyCode::Down => {
+                        if app.sidebar_focused { app.sidebar_down() } else { app.move_down() }
+                    }
+                    KeyCode::Char('k') | KeyCode::Up => {
+                        if app.sidebar_focused { app.sidebar_up() } else { app.move_up() }
+                    }
+
+                    // Tab navigation (only when sidebar not focused)
+                    KeyCode::Char('l') | KeyCode::Right
+                        if !app.sidebar_focused => app.next_tab(),
+                    KeyCode::Char('h') | KeyCode::Left
+                        if !app.sidebar_focused => app.prev_tab(),
 
                     _ => {}
                 }

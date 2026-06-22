@@ -68,9 +68,14 @@ fn render_title(frame: &mut Frame, app: &App, area: Rect) {
 // ─── Sidebar ────────────────────────────────────────────────────────────────
 
 fn render_sidebar(frame: &mut Frame, app: &mut App, area: Rect) {
+    let border_style = if app.sidebar_focused {
+        Style::default().fg(CYAN).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(CYAN).add_modifier(Modifier::DIM)
+    };
     let border = Block::default()
         .borders(Borders::RIGHT)
-        .border_style(Style::default().fg(CYAN).add_modifier(Modifier::DIM));
+        .border_style(border_style);
     frame.render_widget(border, area);
 
     // Leave 1 col for the right border; use the rest for content
@@ -334,13 +339,18 @@ fn render_status(frame: &mut Frame, app: &mut App, area: Rect) {
     ]));
     frame.render_widget(status, zones[0]);
 
+    let (ctrl_label, ctrl_hint) = if app.sidebar_focused {
+        ("^dir", " salir sidebar    ")
+    } else {
+        ("^dir", " foco sidebar    ")
+    };
     let keys = Paragraph::new(Line::from(vec![
         Span::styled(" jk/↑↓", accent()),
-        Span::styled(" lista    ", dim()),
+        Span::styled(" nav    ", dim()),
         Span::styled("hl/←→", accent()),
         Span::styled(" tabs    ", dim()),
-        Span::styled("^jk/^↑↓", accent()),
-        Span::styled(" sidebar    ", dim()),
+        Span::styled(ctrl_label, accent()),
+        Span::styled(ctrl_hint, dim()),
         Span::styled("q", Style::default().fg(Color::Red)),
         Span::styled(" salir", dim()),
     ])).alignment(Alignment::Left);

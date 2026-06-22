@@ -11,6 +11,7 @@ pub struct App {
     pub preview_git_info: String,
     pub list_area: Rect,
     pub sidebar_scroll: usize,
+    pub sidebar_focused: bool,
     pub current_path: String,              // relative to lib root, empty = root
     path_stack: Vec<(String, usize)>,      // (path, selected_idx) for back navigation
     lib_path: String,
@@ -36,6 +37,7 @@ impl App {
             preview_git_info: String::new(),
             list_area: Rect::default(),
             sidebar_scroll: 0,
+            sidebar_focused: false,
             current_path: String::new(),
             path_stack: Vec::new(),
             lib_path,
@@ -174,6 +176,10 @@ impl App {
                 .trim()
                 .to_string();
         }
+    }
+
+    pub fn toggle_sidebar_focus(&mut self) {
+        self.sidebar_focused = !self.sidebar_focused;
     }
 
     pub fn next_tab(&mut self) {
