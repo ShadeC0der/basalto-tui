@@ -6,7 +6,8 @@ use std::collections::HashMap;
 #[derive(Deserialize, Clone)]
 pub struct LibraryEntry {
     pub name: String,
-    pub source: String,
+    #[serde(default)]
+    pub source: Option<String>,
 }
 
 #[derive(Deserialize, Default)]

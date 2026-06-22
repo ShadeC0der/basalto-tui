@@ -440,11 +440,13 @@ fn render_bibliotecas(frame: &mut Frame, app: &App, area: Rect) {
         };
 
         let source_max = width.saturating_sub(4 + lib.name.len() + 12);
-        let source = truncate(&lib.source, source_max);
-        let source_span = Span::styled(
-            format!("  {}", source),
-            Style::default().fg(Color::DarkGray),
-        );
+        let source_span = match &lib.source {
+            Some(s) => Span::styled(
+                format!("  {}", truncate(s, source_max)),
+                Style::default().fg(Color::DarkGray),
+            ),
+            None => Span::styled("  local", Style::default().fg(Color::DarkGray)),
+        };
 
         lines.push(Line::from(vec![
             indicator,
