@@ -615,9 +615,8 @@ impl App {
     }
 
     pub fn modal_add_enter(&mut self) {
-        if let Some(Modal::Add { focused, .. }) = &mut self.modal {
-            if *focused < 2 { *focused += 1; return; }
-        }
+        if let Some(Modal::Add { focused, .. }) = &mut self.modal
+            && *focused < 2 { *focused += 1; return; }
         self.modal_confirm_add();
     }
 
@@ -675,7 +674,7 @@ impl App {
             let home = dirs::home_dir()
                 .map(|h| h.to_string_lossy().to_string())
                 .unwrap_or_default();
-            format!("{}/{}", home, &dest[2..])
+            format!("{}/{}", home, dest.strip_prefix("~/").unwrap_or(dest))
         } else {
             dest.clone()
         };
@@ -748,7 +747,7 @@ impl App {
             let home = dirs::home_dir()
                 .map(|h| h.to_string_lossy().to_string())
                 .unwrap_or_default();
-            format!("{}/{}", home, &dest[2..])
+            format!("{}/{}", home, dest.strip_prefix("~/").unwrap_or(dest.as_str()))
         } else {
             dest.clone()
         };
@@ -894,9 +893,8 @@ impl App {
         let mut para = 0usize;
         let mut result = Vec::new();
         for item in &items {
-            if let SidebarRow::Header(s) = item {
-                if *s > 0 { para += 1; } // blank separator before sections 1 and 2
-            }
+            if let SidebarRow::Header(s) = item
+                && *s > 0 { para += 1; } // blank separator before sections 1 and 2
             result.push(para);
             para += 1;
             // Placeholder line ("sin plugins" / "sin tags") when section is empty + expanded

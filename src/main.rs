@@ -264,7 +264,7 @@ fn find_terminal_editor() -> String {
         .or_else(|_| std::env::var("VISUAL"))
         .unwrap_or_default();
 
-    let bin_name = from_env.split('/').last().unwrap_or("").trim().to_string();
+    let bin_name = from_env.split('/').next_back().unwrap_or("").trim().to_string();
     if !bin_name.is_empty() && !GUI_EDITORS.contains(&bin_name.as_str()) {
         return from_env;
     }

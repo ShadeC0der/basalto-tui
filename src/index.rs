@@ -65,7 +65,7 @@ pub fn load_plugins() -> Vec<PluginInfo> {
 
     list.sort_by(|a, b| a.name.cmp(&b.name));
 
-    let tui_configured = read_config().libraries.active.len() > 0
+    let tui_configured = !read_config().libraries.active.is_empty()
         || std::fs::read_to_string(
             format!("{}/.basalto/config.toml", dirs::home_dir().unwrap().to_str().unwrap())
         ).ok().map(|c| c.contains("[tui]")).unwrap_or(false);
@@ -149,9 +149,7 @@ pub fn load_dir(rel_path: &str) -> Vec<(String, EntryMeta)> {
     });
 
     if !rel_path.is_empty() {
-        let mut parent = EntryMeta::default();
-        parent.is_dir = true;
-        entries.insert(0, ("..".to_string(), parent));
+        entries.insert(0, ("..".to_string(), EntryMeta { is_dir: true, ..Default::default() }));
     }
 
     entries
@@ -258,12 +256,12 @@ fn today() -> String {
     let mut days = (secs / 86400) as u32;
     let mut year = 1970u32;
     loop {
-        let diy = if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) { 366 } else { 365 };
+        let diy = if year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400)) { 366 } else { 365 };
         if days < diy { break; }
         days -= diy;
         year += 1;
     }
-    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let leap = year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
     let months = [31u32, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     let (mut month, mut day) = (1u32, days);
     for m in &months {

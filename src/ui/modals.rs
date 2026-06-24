@@ -373,8 +373,7 @@ fn render_modal_output(frame: &mut Frame, title: &str, lines: &[String], scroll:
 
     let mut content: Vec<Line> = lines.iter().map(|l| {
         let style = if l.starts_with('✓')      { Style::default().fg(GREEN) }
-                    else if l.starts_with('✗') { Style::default().fg(Color::Red) }
-                    else if l.starts_with("error") { Style::default().fg(Color::Red) }
+                    else if l.starts_with('✗') || l.starts_with("error") { Style::default().fg(Color::Red) }
                     else { Style::default().fg(WHITE) };
         Line::from(Span::styled(format!(" {}", l), style))
     }).collect();

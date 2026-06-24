@@ -146,7 +146,7 @@ pub fn render_plugins(frame: &mut Frame, app: &App, area: Rect) {
                 Span::styled(
                     format!("  {:<w$}", status_str, w = status_w),
                     if plugin.enabled {
-                        Style::default().fg(if selected { GREEN } else { GREEN }).add_modifier(Modifier::DIM)
+                        Style::default().fg(GREEN).add_modifier(Modifier::DIM)
                     } else {
                         dim()
                     },
